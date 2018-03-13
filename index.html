@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/mouse0270-bootstrap-notify/3.1.7/bootstrap-notify.min.js"></script>
+    <script src="//use.fontawesome.com/releases/v5.0.8/js/all.js"></script>
+    <link href="//cdnjs.cloudflare.com/ajax/libs/bootswatch/4.0.0/materia/bootstrap.min.css" rel="stylesheet" />
+    <style>body{padding-top:40px}</style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col-12">
+          <div class="card border-light mb-3">
+            <div class="card-header">
+              <i class="fas fa-sliders-h"></i> Google Group Advanced Settings
+              <div class="float-right">
+                <button type="button" id="refresh" class="btn btn-primary btn-sm"><i class="fas fa-sync"></i></button>
+              </div>
+            </div>
+            <div class="card-body">
+              <form>
+                <div class="form-group">
+                  <fieldset>
+                    <label class="control-label" for="groups"><i class="fas fa-users"></i> Group</label>
+                    <select id="groups" class="custom-select">
+                      <option selected>Loading...</option>
+                    </select>
+                  </fieldset>
+                </div>
+                <div class="form-group row">
+                  <fieldset class="col">
+                    <label class="control-label" for="settingQuestion"><i class="far fa-question-circle"></i> Setting to Change</label>
+                    <select id="settingQuestion" class="custom-select">
+                      <option selected>Loading...</option>
+                    </select>
+                  </fieldset>
+                  <fieldset class="col">
+                  <label class="control-label" for="settingAnswer"><i class="fas fa-cog"></i></label>
+                    <select id="settingAnswer" class="custom-select">
+                      <option selected>Loading...</option>
+                    </select>
+                  </fieldset>
+                </div>
+                <div class="col-auto">
+                  <button id="submit" type="submit" class="btn btn-block btn-primary">Update Setting</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      $(document).ready(function() {
+        getGroups();
+        populateSettingQuestions();
+      });
+
+      // the function to update the "groups" dropdown.
+      // happens on load and when the refresh button is pressed.
+      function getGroups() {
+        console.log("Updating all groups...");
+        disableRefresh();
+        disableSubmit("Just a minute...");
+        $('#groups').find('option').remove().append('<option selected>Refreshing...</option>');
+        google.script.run.withSuccessHandler(updateGroupsDropdown).withFailureHandler(handleError).getAllGroups();
+      }
+
+      // getGroups() has run successfully
+      // this updates the dropdown with all of the groups as choices
+      function updateGroupsDropdown(groups) {
+
+        $('#groups').find('option').remove();
+        for (var i in groups) {
+          $('#groups').append('<option value="' + groups[i].email + '">' + groups[i].name + ' (' + groups[i].email + ')</option>');
+        }
+
+        console.log("Updated!");
+
+        var groupId = $('#groups option:selected').val();
+        google.script.run.withSuccessHandler(selectCurrentSettingAnswer).withFailureHandler(handleError).getGroupSettings(groupId);
+
+        enableRefresh();
+        enableSubmit();
+
+      }
+
+      // handles all errors that might happen from any of the server-side apps script functions
+      function handleError(error) {
+        $.notify({
+          "icon": "fas fa-exclamation-triangle",
+          "delay": 30000,
+          "message": error
+        },{
+          "type": "danger"
+        });
+        enableSubmit();
+        enableRefresh();
+      }
+
+      // this is what happens when the form is submitted.
+      // disable the buttons, then grab the group, the setting to change, and the new value,
+      // then run setGroupSetting() server-side to update that setting
+      function update(event) {
+        event.preventDefault();
+        disableSubmit('Setting...');
+        disableRefresh();
+        var groupId = $('#groups option:selected').val();
+        var settingQuestion = $('#settingQuestion option:selected').val();
+        var settingAnswer = $('#settingAnswer option:selected').val();
+        console.log("Attempting to update " + settingQuestion + " setting to " + settingAnswer + " for " + groupId + "...");
+        google.script.run.withSuccessHandler(settingSetSuccessfully).withFailureHandler(handleError).setGroupSetting(groupId, settingQuestion, settingAnswer);
+      }
+
+      // once the above function runs successfully,
+      // this resets the form, sends a "success" notification,
+      // sets the correct settings colors, and re-enables the buttons
+      function settingSetSuccessfully(setting) {
+        var groupId = $('#groups option:selected').val();
+        getQuestionSelectionAndColors();
+        $.notify({
+          "icon": "fas fa-thumbs-up",
+          "delay": 30000,
+          "message": '"' + $('#settingQuestion option:selected').val() + '" set to "' +  $('#settingAnswer option:selected').val() + '"'
+        },{
+          "type": "success"
+        });
+        console.log("Setting set successfully!");
+        enableSubmit();
+        enableRefresh();
+      }
+
+      //
+      //
+      function disableSubmit(buttonText) {
+        $('#submit').addClass('disabled').html(buttonText).off().click(function(event){event.preventDefault()});
+      }
+
+      function enableSubmit() {
+        $('#submit').removeClass('disabled').html('Update Setting').off().click(update);
+      }
+
+      function disableRefresh() {
+        $('#refresh').addClass('disabled').html('<i class="fas fa-spin fa-sync"></i>').off().click(function(event){event.preventDefault()});
+      }
+
+      function enableRefresh() {
+        $('#refresh').removeClass('disabled').html('<i class="fas fa-sync"></i>').off().click(refresh);
+      }
+      //
+      //
+
+      // the click listener for the refresh
+      function refresh() {
+        if (!$('#refresh').hasClass('disabled')) {
+          getGroups();
+        }
+        populateSettingQuestions();
+      }
+    </script>
+
+    <script>
+      // this is an objectified and clarified version of all of the groups properties available via the api
+      // https://developers.google.com/admin-sdk/groups-settings/v1/reference/groups
+      var settings = {
+        "whoCanViewGroup": {
+          "name": "Who has permission to view the group?",
+          "choices": [
+            {
+              "name": "Any Google Apps user",
+              "setting": "ANYONE_CAN_VIEW"
+            },
+            {
+              "name": "Anyone in the domain",
+              "setting": "ALL_IN_DOMAIN_CAN_VIEW"
+            },
+            {
+              "name": "All group members",
+              "setting": "ALL_MEMBERS_CAN_VIEW"
+            },
+            {
+              "name": "Only managers and owners",
+              "setting": "ALL_MANAGERS_CAN_VIEW"
+            }
+          ]
+        },
+        "whoCanJoin": {
+          "name": "Who has permission to join the group?",
+          "choices": [
+            {
+              "name": "Anyone can join (even outside the domain)",
+              "setting": "ANYONE_CAN_JOIN"
+            },
+            {
+              "name": "Anyone in the domain",
+              "setting": "ALL_IN_DOMAIN_CAN_JOIN"
+            },
+            {
+              "name": "Non group members can request an invitation to join",
+              "setting": "CAN_REQUEST_TO_JOIN"
+            },
+            {
+              "name": "Users can be invited to join",
+              "setting": "INVITED_CAN_JOIN"
+            }
+          ]
+        },
+        "whoCanViewMembership": {
+          "name": "Who has permission to view membership of the group?",
+          "choices": [
+            {
+              "name": "Anyone in the domain",
+              "setting": "ALL_IN_DOMAIN_CAN_VIEW"
+            },
+            {
+              "name": "All members",
+              "setting": "ALL_MEMBERS_CAN_VIEW"
+            },
+            {
+              "name": "Only managers and owners",
+              "setting": "ALL_MANAGERS_CAN_VIEW"
+            }
+          ]
+        },
+        "whoCanAdd": {
+          "name": "Who has permission to directly add members to the group?",
+          "choices": [
+            {
+              "name": "All members",
+              "setting": "ALL_MEMBERS_CAN_ADD"
+            },
+            {
+              "name": "Only managers and owners",
+              "setting": "ALL_MANAGERS_CAN_ADD"
+            },
+            {
+              "name": "No one",
+              "setting": "NONE_CAN_ADD"
+            }
+          ]
+        },
+        "whoCanInvite": {
+          "name": "Who has permission to invite members to the group?",
+          "choices": [
+            {
+              "name": "All members",
+              "setting": "ALL_MEMBERS_CAN_INVITE"
+            },
+            {
+              "name": "Only managers and owners",
+              "setting": "ALL_MANAGERS_CAN_INVITE"
+            },
+            {
+              "name": "No one",
+              "setting": "NONE_CAN_ADD"
+            }
+          ]
+        },
+        "allowExternalMembers": {
+          "name": "Can users outside the domain view and join the group?",
+          "choices": [
+            {
+              "name": "Yes",
+              "setting": "true"
+            },
+            {
+              "name": "No",
+              "setting": "false"
+            }
+          ]
+        },
+        "whoCanPostMessage": {
+          "name": "Who has permission to post messages to the group?",
+          "choices": [
+            {
+              "name": "Anyone (even outside the domain)",
+              "setting": "ANYONE_CAN_POST"
+            },
+            {
+              "name": "Anyone in the domain",
+              "setting": "ALL_IN_DOMAIN_CAN_POST"
+            },
+            {
+              "name": "Managers and group owners",
+              "setting": "ALL_MANAGERS_CAN_POST"
+            },
+            {
+              "name": "Any group member",
+              "setting": "ALL_MEMBERS_CAN_POST"
+            }
+          ]
+        },
+        "allowWebPosting": {
+          "name": "Can users post from the web?",
+          "choices": [
+            {
+              "name": "Yes",
+              "setting": "true"
+            },
+            {
+              "name": "No",
+              "setting": "false"
+            }
+          ]
+        },
+        "messageModerationLevel": {
+          "name": "How are messages moderated?",
+          "choices": [
+            {
+              "name": "All messages are sent to the group owner's email address for approval",
+              "setting": "MODERATE_ALL_MESSAGES"
+            },
+            {
+              "name": "All messages from non group members are sent to the group owner's email address for approval",
+              "setting": "MODERATE_NON_MEMBERS"
+            },
+            {
+              "name": "All messages from new members are sent to the group owner's email address for approval",
+              "setting": "MODERATE_NEW_MEMBERS"
+            },
+            {
+              "name": "No moderator approval is required",
+              "setting": "MODERATE_NONE"
+            }
+          ]
+        },
+        "spamModerationLevel": {
+          "name": "How to handle moderation for messages detected as spam?",
+          "choices": [
+            {
+              "name": "Post the message to the group",
+              "setting": "ALLOW"
+            },
+            {
+              "name": "Send the message to the moderation queue",
+              "setting": "MODERATE"
+            },
+            {
+              "name": "Send the message to the moderation queue, but do not send notification to moderators",
+              "setting": "SILENTLY_MODERATE"
+            },
+            {
+              "name": "Immediately reject the message",
+              "setting": "REJECT"
+            }
+          ]
+        },
+        "showInGroupDirectory": {
+          "name": "Show group in the domain's Google Groups directory?",
+          "choices": [
+            {
+              "name": "Yes",
+              "setting": "true"
+            },
+            {
+              "name": "No",
+              "setting": "false"
+            }
+          ]
+        },
+        "includeInGlobalAddressList": {
+          "name": "Show group in the domain's email address directory?",
+          "choices": [
+            {
+              "name": "Yes",
+              "setting": "true"
+            },
+            {
+              "name": "No",
+              "setting": "false"
+            }
+          ]
+        },
+        "membersCanPostAsTheGroup": {
+          "name": "Allow members to post using the group email address?",
+          "choices": [
+            {
+              "name": "Yes",
+              "setting": "true"
+            },
+            {
+              "name": "No",
+              "setting": "false"
+            }
+          ]
+        },
+        "whoCanLeaveGroup": {
+          "name": "Who can leave the group?",
+          "choices": [
+            {
+              "name": "All members",
+              "setting": "ALL_MEMBERS_CAN_LEAVE"
+            },
+            {
+              "name": "Managers and owners",
+              "setting": "ALL_MANAGERS_CAN_LEAVE"
+            },
+            {
+              "name": "No one",
+              "setting": "NONE_CAN_LEAVE"
+            }
+          ]
+        },
+        "whoCanContactOwner": {
+          "name": "Who can contact the owner of the group?",
+          "choices": [
+            {
+              "name": "Anyone",
+              "setting": "ANYONE_CAN_CONTACT"
+            },
+            {
+              "name": "Anyone in the domain",
+              "setting": "ALL_IN_DOMAIN_CAN_CONTACT"
+            },
+            {
+              "name": "All members",
+              "setting": "ALL_MEMBERS_CAN_CONTACT"
+            },
+            {
+              "name": "Managers and owners",
+              "setting": "ALL_MANAGERS_CAN_CONTACT"
+            }
+          ]
+        }
+      }
+
+      // runs on page load, and when the refresh button is pressed.
+      // this goes through the object above and adds the possible "questions", or settings, to the dropdown.
+      function populateSettingQuestions() {
+        $('#settingQuestion').find('option').remove();
+        $('#settingAnswer').attr('disabled',true);
+        for (var i in settings) {
+          $('#settingQuestion').append('<option value="' + i + '">' + settings[i].name + '</option>');
+        }
+        populateSettingAnswers();
+      }
+
+      // when the "group" or "question" dropdown changes, we need to change the available "answers".
+      $('#groups, #settingQuestion').change(function() {
+        disableRefresh();
+        disableSubmit("Just a minute...");
+        $('#settingAnswer').attr('disabled',true).find('option').remove().append('<option selected>Loading...</option>');
+        populateSettingAnswers();
+        getQuestionSelectionAndColors();
+      });
+
+      // this only runs when the question changes (above).
+      // it uses the above object so that only the correct "answers" are available for the current "question"
+      function populateSettingAnswers() {
+        $('#settingAnswer').find('option').remove();
+        var selected = $('#settingQuestion option:selected').val();
+        var choices = settings[selected].choices;
+        for (var i in choices) {
+          $('#settingAnswer').append('<option value="' + choices[i].setting + '">' + choices[i].name + '</option>');
+        }
+      }
+
+      // this last set is a convenience to let the user know what the "current" setting (or "answer") is when they change the question.
+      function getQuestionSelectionAndColors() {
+        google.script.run.withSuccessHandler(selectCurrentSettingAnswer).withFailureHandler(handleError).getGroupSettings($('#groups option:selected').val());
+      }
+
+      // once getQuestionSelectionAndColors() runs, this will look at the current "question"
+      // and move the "answer" dropdown to have the current setting be the "selected" answer.
+      // it will also color every other setting besides the "selected" one green,
+      // to make it obvious which setting would be an update if selected.
+      // this seems to work in some browsers only.
+      // silly bootstrap.
+      function selectCurrentSettingAnswer(setting) {
+        var selected = $('#settingQuestion option:selected').val();
+        $('#settingAnswer').attr('disabled',false).val(setting[selected]).change();
+        $('#settingAnswer option').removeClass('text-success text-muted');
+        $('#settingAnswer option:not(:selected)').addClass('text-success');
+        $('#settingAnswer option:selected').addClass('text-muted');
+        enableRefresh();
+        enableSubmit();
+      }
+    </script>
+
+  </body>
+</html>
