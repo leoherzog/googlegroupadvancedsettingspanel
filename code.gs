@@ -1,37 +1,34 @@
 //
 //
-var domain = "yourdomain.com";
+const domain = "yourdomain.com";
 //
 //
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index.html').setTitle("Google Group Advanced Settings");
+  return HtmlService.createHtmlOutputFromFile('index.html').setTitle('Google Group Advanced Settings');
 }
 
 // https://developers.google.com/apps-script/advanced/admin-sdk-directory#list_all_groups
 function getAllGroups() {
-  var allGroups = [];
-  var pageToken, page;
+  let groups = [];
+  let pageToken, page;
   do {
     page = AdminDirectory.Groups.list({
-      "domain": domain,
+      "domain": "hope.edu",
       "pageToken": pageToken
     });
-    var groups = page.groups;
-    if (groups) {
-      for (var i in groups) {
-        allGroups = allGroups.concat(groups[i]);
-      }
+    if (page.groups) {
+      groups = groups.concat(page.groups);
     } else {
-      throw 'No groups found.';
+      throw 'No groups found on this check.'; // shouldn't be possible
     }
     pageToken = page.nextPageToken;
   } while (pageToken);
-  return allGroups;
+  return groups;
 }
 
 function getGroupSettings(groupId) {
-  var re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
   if (!groupId || typeof groupId != "string" || !re.test(groupId.toLowerCase())) {
     throw "Please call this function with a Google Group ID";
   }
@@ -39,7 +36,7 @@ function getGroupSettings(groupId) {
 }
 
 function setGroupSetting(groupId, settingToChange, newSetting) {
-  var re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
   if (!groupId || typeof groupId != "string" || !re.test(groupId.toLowerCase())) {
     throw "Please call this function with a Google Group ID";
   }
@@ -51,7 +48,7 @@ function setGroupSetting(groupId, settingToChange, newSetting) {
   }
   // okay. we now have a valid email address for the group id and the setting we want to change
   // get the group object
-  var group = AdminGroupsSettings.Groups.get(groupId);
+  let group = AdminGroupsSettings.Groups.get(groupId);
   // update it with the new property
   group[settingToChange] = newSetting;
   // then patch the group with it's new setting
